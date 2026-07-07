@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>เกมตีตัวตุ่น แม่ ก กา — AR</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --dirt:#4E342E; --dirt-rim:#795548;
+    --wood:#8D6E63; --wood-d:#5D4037; --wood-l:#A1887F;
+    --gold:#FFC107; --ok:#43A047; --bad:#E53935; --ink:#3E2723;
+    --sky1:#5DBCF0; --sky2:#8FD3F4; --grass:#7CB342;
+    --font:'Kanit',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;font-family:var(--font);}
+  html,body{height:100%;overflow:hidden;color:var(--ink);background:#132a1a;}
+  body{user-select:none;}
+
+  #cam{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;
+    transform:scaleX(-1);filter:saturate(.9) brightness(.62);z-index:0;}
+  .grassveil{position:fixed;inset:0;z-index:1;pointer-events:none;
+    background:linear-gradient(180deg,rgba(19,42,26,.15) 0%,rgba(19,42,26,.05) 45%,rgba(60,110,40,.35) 100%);}
+  #overlay{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:6;}
+  #app{position:relative;z-index:3;height:100%;display:flex;flex-direction:column;}
+
+  /* ---------- HUD ---------- */
+  #hud{display:flex;justify-content:space-between;align-items:flex-start;
+    padding:clamp(12px,2vw,24px) clamp(14px,3vw,36px);gap:10px;}
+  .plate{background:var(--wood);border:4px solid var(--wood-d);border-radius:20px;
+    box-shadow:inset 0 3px 0 rgba(255,255,255,.18),0 6px 0 rgba(0,0,0,.2);
+    padding:.4em .9em;display:flex;align-items:center;gap:.55em;color:#fff;}
+  .plate .ic{font-size:clamp(22px,4vw,34px);line-height:1;}
+  .plate .col{display:flex;flex-direction:column;line-height:1;}
+  .plate .lab{font-size:clamp(12px,2vw,16px);opacity:.9;font-weight:500;}
+  .plate .val{font-size:clamp(30px,6.5vw,50px);font-weight:800;}
+  #timePlate.low .val{color:#FFCDD2;animation:blink .6s steps(2) infinite;}
+  @keyframes blink{50%{opacity:.3;}}
+  #scorePlate .val{color:#FFE082;}
+  .sign{background:linear-gradient(180deg,var(--wood-l),var(--wood));border:5px solid var(--wood-d);
+    border-radius:18px;padding:.4em 1em;color:#fff;font-weight:700;
+    font-size:clamp(16px,3.6vw,30px);box-shadow:0 6px 0 rgba(0,0,0,.2);}
+  .sign .k{color:#7FE3FF;}
+
+  /* ---------- สนาม / หลุม ---------- */
+  #field{flex:1;position:relative;display:grid;place-items:center;padding:0 4vw 3vh;}
+  .grid{width:min(94vw,820px);display:grid;grid-template-columns:repeat(3,1fr);
+    gap:clamp(8px,3vw,34px) clamp(14px,5vw,56px);}
+  .hole{position:relative;aspect-ratio:1.4/1;}
+  .hole .base{position:absolute;left:50%;bottom:-6%;transform:translateX(-50%);
+    width:118%;height:40%;border-radius:50%;background:rgba(60,110,40,.45);filter:blur(2px);}
+  .hole .rim{position:absolute;left:50%;bottom:0;transform:translateX(-50%);
+    width:100%;height:52%;border-radius:50%;
+    background:radial-gradient(ellipse at 50% 35%,var(--dirt) 55%,#2e1c16 100%);
+    box-shadow:0 6px 0 rgba(0,0,0,.22),inset 0 8px 14px rgba(0,0,0,.55);border:5px solid var(--dirt-rim);}
+  .hole .clip{position:absolute;left:0;right:0;bottom:8%;height:150%;overflow:hidden;
+    display:flex;justify-content:center;align-items:flex-end;}
+  .mole{width:72%;transform:translateY(118%);transition:transform .18s cubic-bezier(.34,1.4,.5,1);position:relative;}
+  .mole.up{transform:translateY(4%);}
+  .mole.bonk{transform:translateY(40%) scale(.9);}
+  .mole svg{display:block;width:100%;height:auto;filter:drop-shadow(0 4px 3px rgba(0,0,0,.35));}
+  .word{position:absolute;left:50%;top:-4%;transform:translate(-50%,-100%);
+    background:#fff;border:3px solid #5D4037;border-radius:16px;padding:.05em .6em;
+    font-weight:700;font-size:clamp(20px,4.6vw,38px);color:var(--ink);white-space:nowrap;
+    box-shadow:0 4px 0 rgba(0,0,0,.15);}
+  .word::after{content:"";position:absolute;left:50%;bottom:-11px;transform:translateX(-50%);
+    border:7px solid transparent;border-top-color:#5D4037;}
+  .word.ok{border-color:var(--ok);} .word.ok::after{border-top-color:var(--ok);}
+  .word.bad{border-color:var(--bad);} .word.bad::after{border-top-color:var(--bad);}
+
+  .float{position:absolute;left:50%;top:8%;transform:translateX(-50%);
+    font-size:clamp(24px,5vw,44px);font-weight:800;pointer-events:none;
+    animation:floatUp .8s ease-out forwards;z-index:5;}
+  .float.plus{color:#B9F6CA;text-shadow:0 2px 4px #1B5E20;}
+  .float.minus{color:#FF8A80;text-shadow:0 2px 4px #7f0000;}
+  @keyframes floatUp{0%{opacity:0;transform:translate(-50%,10px);}20%{opacity:1;}
+    100%{opacity:0;transform:translate(-50%,-48px);}}
+
+  .hint{position:fixed;bottom:2.5vh;left:50%;transform:translateX(-50%);z-index:7;
+    background:rgba(43,28,22,.85);border:2px solid var(--wood-d);border-radius:999px;
+    padding:.55em 1.4em;font-size:clamp(15px,2.4vw,20px);font-weight:500;color:#fff;
+    display:flex;gap:.6em;align-items:center;opacity:0;transition:opacity .3s ease;pointer-events:none;}
+  .hint.show{opacity:1;}
+  .hint .dot{width:.7em;height:.7em;border-radius:50%;background:var(--bad);
+    box-shadow:0 0 12px var(--bad);animation:pulse 1s infinite;}
+  @keyframes pulse{50%{opacity:.35;}}
+
+  /* ================= หน้าเริ่ม (ออกแบบใหม่) ================= */
+  .overlay{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;
+    padding:4vw;overflow:hidden;}
+  .overlay.hidden{display:none;}
+  #startScreen{
+    background:linear-gradient(180deg,var(--sky1) 0%,var(--sky2) 46%,#A8D66B 46%,var(--grass) 100%);
+  }
+  .clouds span{position:absolute;background:#fff;border-radius:50%;opacity:.9;}
+  .cl1{width:130px;height:48px;top:12%;left:12%;box-shadow:44px 8px 0 6px #fff,90px 14px 0 -4px #fff;}
+  .cl2{width:100px;height:38px;top:22%;right:14%;box-shadow:38px 8px 0 4px #fff,74px 12px 0 -6px #fff;}
+  .cl3{width:80px;height:30px;top:8%;right:34%;box-shadow:30px 6px 0 2px #fff;}
+  .sun{position:absolute;top:6%;right:8%;width:clamp(70px,10vw,120px);height:clamp(70px,10vw,120px);
+    border-radius:50%;background:radial-gradient(circle,#FFF176,#FFD54F);
+    box-shadow:0 0 60px rgba(255,213,79,.7);}
+
+  .startcard{position:relative;z-index:2;width:min(92vw,860px);text-align:center;
+    display:flex;flex-direction:column;align-items:center;gap:clamp(14px,2.4vh,26px);}
+
+  .titlesign{position:relative;background:linear-gradient(180deg,#A1887F,#8D6E63);
+    border:8px solid var(--wood-d);border-radius:26px;padding:clamp(16px,3vh,30px) clamp(28px,6vw,64px);
+    box-shadow:0 12px 0 rgba(0,0,0,.25),inset 0 5px 0 rgba(255,255,255,.2);}
+  .titlesign::before,.titlesign::after{content:"";position:absolute;top:-30px;width:14px;height:32px;
+    background:var(--wood-d);border-radius:5px;}
+  .titlesign::before{left:24%;} .titlesign::after{right:24%;}
+  .titlesign .t1{font-size:clamp(30px,7vw,64px);font-weight:800;color:#fff;line-height:1.05;
+    text-shadow:0 3px 0 #4E342E;}
+  .titlesign .t2{font-size:clamp(38px,9vw,88px);font-weight:800;line-height:1;margin-top:.1em;
+    color:#FFD54F;text-shadow:0 4px 0 #E65100,0 6px 0 rgba(0,0,0,.2);
+    -webkit-text-stroke:2px #fff;}
+  .titlesign .badge{display:inline-block;margin-top:.5em;background:#43A047;color:#fff;
+    font-weight:700;font-size:clamp(14px,2.6vw,22px);padding:.2em 1em;border-radius:999px;
+    border:3px solid #2E7D32;box-shadow:0 4px 0 rgba(0,0,0,.15);}
+
+  .howcard{background:rgba(255,255,255,.96);border:5px solid var(--wood-d);border-radius:24px;
+    padding:clamp(16px,3vh,26px) clamp(20px,4vw,40px);width:100%;max-width:640px;
+    box-shadow:0 10px 0 rgba(0,0,0,.15);}
+  .howcard h2{font-size:clamp(20px,3.8vw,30px);font-weight:800;color:var(--wood-d);margin-bottom:.5em;}
+  .steps{display:flex;flex-direction:column;gap:.55em;text-align:left;}
+  .step{display:flex;align-items:center;gap:.7em;font-size:clamp(16px,3vw,24px);font-weight:500;color:#3E2723;}
+  .step .n{flex:none;width:clamp(34px,6vw,46px);height:clamp(34px,6vw,46px);border-radius:50%;
+    background:var(--gold);color:#4E342E;font-weight:800;display:flex;align-items:center;justify-content:center;
+    font-size:clamp(18px,3.4vw,26px);box-shadow:0 3px 0 #C79100;}
+  .scorepill{display:flex;gap:.6em;justify-content:center;flex-wrap:wrap;margin-top:.7em;}
+  .scorepill b{padding:.25em 1em;border-radius:999px;font-weight:700;font-size:clamp(15px,2.8vw,22px);color:#fff;}
+  .scorepill .g{background:var(--ok);} .scorepill .r{background:var(--bad);} .scorepill .t{background:var(--wood);}
+
+  .btn{cursor:pointer;border:none;color:#fff;font-weight:800;font-family:var(--font);
+    font-size:clamp(24px,4.4vw,38px);padding:.55em 1.8em;border-radius:999px;
+    background:linear-gradient(180deg,#FB8C00,#EF6C00);
+    box-shadow:0 8px 0 #BF360C,0 12px 24px rgba(0,0,0,.3);
+    transition:transform .08s ease,box-shadow .08s ease;
+    display:inline-flex;align-items:center;gap:.4em;}
+  .btn:active{transform:translateY(6px);box-shadow:0 2px 0 #BF360C;}
+  .btn.green{background:linear-gradient(180deg,#66BB6A,#43A047);box-shadow:0 8px 0 #2E7D32,0 12px 24px rgba(0,0,0,.3);}
+  .btn.green:active{box-shadow:0 2px 0 #2E7D32;}
+  .btn.big{animation:bounce 1.6s ease-in-out infinite;}
+  @keyframes bounce{0%,100%{transform:translateY(0);}50%{transform:translateY(-8px);}}
+  .camnote{font-size:clamp(13px,2.2vw,17px);color:#4E342E;font-weight:500;opacity:.9;}
+
+  .peek{position:absolute;bottom:0;width:clamp(70px,12vw,130px);z-index:1;}
+  .peek.l{left:6%;} .peek.r{right:6%;transform:scaleX(-1);}
+
+  /* ================= หน้าจบ ================= */
+  #endScreen{background:linear-gradient(180deg,rgba(19,42,26,.82),rgba(60,110,40,.78));backdrop-filter:blur(3px);}
+  .endcard{position:relative;z-index:2;text-align:center;display:flex;flex-direction:column;
+    align-items:center;gap:clamp(12px,2.2vh,22px);width:min(90vw,560px);}
+  .endcard .big{font-size:clamp(40px,9vw,78px);font-weight:800;color:#fff;text-shadow:0 3px 0 #E65100,0 6px 0 rgba(0,0,0,.25);}
+  .panel{background:rgba(43,28,22,.92);border:5px solid var(--gold);border-radius:24px;
+    padding:clamp(18px,3vh,30px) clamp(22px,5vw,44px);color:#fff;width:100%;box-shadow:0 12px 34px rgba(0,0,0,.4);}
+  .panel .verdict{font-size:clamp(24px,4.6vw,36px);font-weight:800;color:var(--gold);}
+  .panel .lead{font-size:clamp(15px,2.6vw,20px);font-weight:500;margin-top:.2em;}
+  .finalbig{font-size:clamp(64px,15vw,140px);font-weight:800;color:var(--gold);line-height:1;text-shadow:0 4px 0 rgba(0,0,0,.3);}
+  .finalbig .star{color:#FFD54F;font-size:.55em;}
+  .stat{font-size:clamp(14px,2.4vw,18px);color:#A5D6A7;font-weight:500;}
+</style>
+</head>
+<body>
+  <video id="cam" playsinline autoplay muted></video>
+  <div class="grassveil"></div>
+  <canvas id="overlay"></canvas>
+
+  <div id="app">
+    <div id="hud">
+      <div class="plate" id="timePlate">
+        <span class="ic">⏱️</span>
+        <div class="col"><span class="lab">เวลา</span><span class="val" id="timeVal">60</span></div>
+      </div>
+      <div class="sign">ตีตัวตุ่น <span class="k">แม่ ก กา</span></div>
+      <div class="plate" id="scorePlate">
+        <span class="ic">🏆</span>
+        <div class="col"><span class="lab">คะแนน</span><span class="val" id="scoreVal">0</span></div>
+      </div>
+    </div>
+    <div id="field"><div class="grid" id="grid"></div></div>
+  </div>
+
+  <div class="hint" id="hint"><span class="dot"></span><span>ยกมือขึ้นให้กล้องเห็น</span></div>
+
+  <!-- ================= หน้าเริ่ม ================= -->
+  <div class="overlay" id="startScreen">
+    <div class="clouds"><span class="cl1"></span><span class="cl2"></span><span class="cl3"></span></div>
+    <div class="sun"></div>
+
+    <div class="startcard">
+      <div class="titlesign">
+        <div class="t1">🔨 เกมตีตัวตุ่น</div>
+        <div class="t2">แม่ ก กา</div>
+        <div class="badge">โหมด AR · เล่นด้วยการเคลื่อนไหว</div>
+      </div>
+
+      <div class="howcard">
+        <h2>วิธีเล่น</h2>
+        <div class="steps">
+          <div class="step"><span class="n">1</span> ยกมือให้กล้องเห็น จะมีค้อนตามปลายนิ้ว</div>
+          <div class="step"><span class="n">2</span> เลื่อนมือไปแตะตัวตุ่นที่มีคำ <b style="color:#1565C0">&nbsp;แม่ ก กา&nbsp;</b> (คำไม่มีตัวสะกด)</div>
+          <div class="step"><span class="n">3</span> ระวัง! ห้ามตีคำที่มีตัวสะกด</div>
+        </div>
+        <div class="scorepill">
+          <b class="g">ตีถูก +10</b>
+          <b class="r">ตีผิด −5</b>
+          <b class="t">⏱️ 60 วินาที</b>
+        </div>
+      </div>
+
+      <button class="btn big" id="startBtn">▶ เริ่มเกมเลย!</button>
+      <div class="camnote" id="camNote">* ครั้งแรกต้องกดอนุญาตกล้อง และเปิดผ่านลิงก์ https</div>
+    </div>
+
+    <svg class="peek l" viewBox="0 0 120 110"><use href="#moleShape"/></svg>
+    <svg class="peek r" viewBox="0 0 120 110"><use href="#moleShape"/></svg>
+  </div>
+
+  <!-- ================= หน้าจบ ================= -->
+  <div class="overlay hidden" id="endScreen">
+    <div class="endcard">
+      <div class="big">หมดเวลา!</div>
+      <div class="panel">
+        <div class="verdict" id="verdict">เก่งมาก!</div>
+        <div class="lead">ทำคะแนนได้</div>
+        <div class="finalbig"><span id="finalVal">0</span> <span class="star">★</span></div>
+        <div class="stat">ตีถูก <span id="hitVal">0</span> คำ · พลาด <span id="missVal">0</span> ครั้ง</div>
+      </div>
+      <button class="btn green" id="againBtn">🔄 เล่นอีกครั้ง</button>
+    </div>
+  </div>
+
+  <!-- นิยามรูปตัวตุ่น (ใช้ซ้ำ) -->
+  <svg width="0" height="0" style="position:absolute"><defs>
+    <g id="moleShape">
+      <ellipse cx="60" cy="66" rx="46" ry="42" fill="#8D6E63"/>
+      <ellipse cx="60" cy="74" rx="30" ry="26" fill="#D7B49E"/>
+      <ellipse cx="34" cy="40" rx="12" ry="14" fill="#8D6E63"/>
+      <ellipse cx="86" cy="40" rx="12" ry="14" fill="#8D6E63"/>
+      <circle cx="46" cy="56" r="9" fill="#fff"/><circle cx="74" cy="56" r="9" fill="#fff"/>
+      <circle cx="47" cy="58" r="4.5" fill="#3E2723"/><circle cx="73" cy="58" r="4.5" fill="#3E2723"/>
+      <circle cx="49" cy="56" r="1.6" fill="#fff"/><circle cx="75" cy="56" r="1.6" fill="#fff"/>
+      <ellipse cx="60" cy="72" rx="9" ry="7" fill="#F48FB1"/>
+      <path d="M60 79 v7 M52 84 q8 6 16 0" stroke="#5D4037" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+      <path d="M40 76 h-14 M42 82 h-13 M40 88 h-12" stroke="#5D4037" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M80 76 h14 M78 82 h13 M80 88 h12" stroke="#5D4037" stroke-width="1.6" stroke-linecap="round"/>
+    </g>
+  </defs></svg>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/hands.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3/camera_utils.js" crossorigin="anonymous"></script>
+<script>
+/* ============ คลังคำ ============ */
+const WORDS_OK = ['ปลา','หมา','ตา','ขา','ปู','งู','หู','ดี','สี','ผี','ชา','ตี','มือ',
+  'เสือ','เรือ','ไก่','นา','มา','รู','เสา','ใจ','ปี','หมี','ดู','โต','ไป','พ่อ','แม่','เธอ','เรา','ให้','นี่'];
+const WORDS_BAD = ['เดือน','นก','ปาก','กิน','ลม','ฝน','คน','บ้าน','นอน','ดิน','จาน','แมว',
+  'ดาว','วัน','กบ','รถ','ผม','ขนม','หมวก','ช้าง','ลิง','เป็ด','มด','ยิ้ม','น้ำ','ครก'];
+
+const MOLE_SVG = `<svg viewBox="0 0 120 110" xmlns="http://www.w3.org/2000/svg"><use href="#moleShape"/></svg>`;
+
+/* ============ องค์ประกอบ ============ */
+const video=document.getElementById('cam');
+const overlay=document.getElementById('overlay');
+const ctx=overlay.getContext('2d');
+const grid=document.getElementById('grid');
+const timeVal=document.getElementById('timeVal');
+const scoreVal=document.getElementById('scoreVal');
+const timePlate=document.getElementById('timePlate');
+const hint=document.getElementById('hint');
+const startScreen=document.getElementById('startScreen');
+const endScreen=document.getElementById('endScreen');
+
+const HOLES=9, GAME_TIME=60, HIT_PAD=18;
+let holes=[], score=0, timeLeft=GAME_TIME, hits=0, misses=0;
+let running=false, spawnTimer=null, clockTimer=null;
+let fingertips=[], handSeen=false;
+
+/* ============ เสียง ============ */
+let ac=null;
+function sfx(t){try{
+  if(!ac)ac=new(window.AudioContext||window.webkitAudioContext)();
+  const n=ac.currentTime;
+  if(t==='hit'){[523,784].forEach((f,i)=>tone(f,n+i*0.06,0.1,'triangle',.28));}
+  else if(t==='miss'){tone(160,n,0.22,'sawtooth',.25);tone(120,n+0.02,0.22,'square',.18);}
+  else if(t==='pop'){tone(300,n,0.05,'sine',.12);}
+}catch(e){}}
+function tone(f,s,d,type,vol){const o=ac.createOscillator(),g=ac.createGain();
+  o.type=type;o.frequency.value=f;o.connect(g);g.connect(ac.destination);
+  g.gain.setValueAtTime(0,s);g.gain.linearRampToValueAtTime(vol,s+0.01);
+  g.gain.exponentialRampToValueAtTime(.0001,s+d);o.start(s);o.stop(s+d);}
+
+/* ============ canvas ============ */
+function resize(){const dpr=Math.min(window.devicePixelRatio||1,2);
+  overlay.width=innerWidth*dpr;overlay.height=innerHeight*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);}
+addEventListener('resize',resize);resize();
+
+/* ============ หลุม ============ */
+function buildHoles(){
+  grid.innerHTML='';holes=[];
+  for(let i=0;i<HOLES;i++){
+    const hole=document.createElement('div');hole.className='hole';
+    hole.innerHTML=`<div class="base"></div><div class="rim"></div>
+      <div class="clip"><div class="mole">${MOLE_SVG}<div class="word"></div></div></div>`;
+    grid.appendChild(hole);
+    holes.push({el:hole.querySelector('.mole'),word:hole.querySelector('.word'),
+      busy:false,isOk:false,active:false,timer:null});
+  }
+}
+
+/* ============ โผล่ ============ */
+function popMole(){
+  if(!running)return;
+  const free=holes.filter(h=>!h.busy);
+  if(free.length){
+    const h=free[Math.random()*free.length|0];
+    const ok=Math.random()<0.55, pool=ok?WORDS_OK:WORDS_BAD;
+    h.isOk=ok;h.busy=true;h.active=true;
+    h.word.textContent=pool[Math.random()*pool.length|0];h.word.className='word';
+    h.el.classList.remove('bonk');h.el.classList.add('up');sfx('pop');
+    h.timer=setTimeout(()=>hideMole(h),1000+Math.random()*800);
+  }
+  const base=Math.max(430,820-(GAME_TIME-timeLeft)*6);
+  spawnTimer=setTimeout(popMole,base+Math.random()*260);
+}
+function hideMole(h){h.el.classList.remove('up');h.active=false;clearTimeout(h.timer);
+  setTimeout(()=>{h.busy=false;h.word.className='word';},200);}
+
+/* ============ ตี ============ */
+function whack(h){
+  if(!running||!h.active)return;
+  h.active=false;clearTimeout(h.timer);
+  if(h.isOk){score+=10;hits++;h.word.classList.add('ok');floatText(h.el,'+10','plus');sfx('hit');}
+  else{score=Math.max(0,score-5);misses++;h.word.classList.add('bad');floatText(h.el,'−5','minus');sfx('miss');}
+  h.el.classList.add('bonk');scoreVal.textContent=score;
+  setTimeout(()=>hideMole(h),260);
+}
+function floatText(m,txt,cls){const f=document.createElement('div');
+  f.className='float '+cls;f.textContent=txt;m.appendChild(f);setTimeout(()=>f.remove(),800);}
+
+function checkHits(){
+  if(!running||!fingertips.length)return;
+  for(const h of holes){
+    if(!h.active)continue;
+    const r=h.el.getBoundingClientRect();
+    for(const f of fingertips){
+      if(f.x>=r.left-HIT_PAD&&f.x<=r.right+HIT_PAD&&f.y>=r.top-HIT_PAD&&f.y<=r.bottom+HIT_PAD){
+        f.hit=true;whack(h);break;
+      }
+    }
+  }
+}
+
+/* ============ นาฬิกา ============ */
+function tickClock(){timeLeft--;timeVal.textContent=timeLeft;
+  timePlate.classList.toggle('low',timeLeft<=10);if(timeLeft<=0)endGame();}
+
+/* ============ เริ่ม/จบ ============ */
+function startGame(){
+  if(ac&&ac.state==='suspended')ac.resume();
+  score=0;timeLeft=GAME_TIME;hits=0;misses=0;running=true;
+  scoreVal.textContent=0;timeVal.textContent=GAME_TIME;timePlate.classList.remove('low');
+  holes.forEach(h=>{h.busy=false;h.active=false;h.el.classList.remove('up','bonk');clearTimeout(h.timer);});
+  startScreen.classList.add('hidden');endScreen.classList.add('hidden');
+  clockTimer=setInterval(tickClock,1000);popMole();
+}
+function endGame(){
+  running=false;clearInterval(clockTimer);clearTimeout(spawnTimer);
+  holes.forEach(h=>{h.el.classList.remove('up');clearTimeout(h.timer);});
+  hint.classList.remove('show');
+  document.getElementById('finalVal').textContent=score;
+  document.getElementById('hitVal').textContent=hits;
+  document.getElementById('missVal').textContent=misses;
+  document.getElementById('verdict').textContent=score>=200?'เก่งมาก! 🏆':score>=100?'ทำได้ดี! 👍':'พยายามอีกนิด! 💪';
+  endScreen.classList.remove('hidden');
+}
+document.getElementById('startBtn').addEventListener('click',startGame);
+document.getElementById('againBtn').addEventListener('click',startGame);
+
+/* ============ MediaPipe ============ */
+const hands=new Hands({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4/${f}`});
+hands.setOptions({maxNumHands:2,modelComplexity:0,minDetectionConfidence:0.6,minTrackingConfidence:0.5});
+hands.onResults(onResults);
+
+function onResults(res){
+  const vw=innerWidth,vh=innerHeight;
+  ctx.clearRect(0,0,vw,vh);
+  fingertips=[];
+  const list=res.multiHandLandmarks||[];
+  handSeen=list.length>0;
+  for(const lm of list){
+    ctx.strokeStyle='rgba(255,255,255,.28)';ctx.lineWidth=3;ctx.beginPath();
+    [[0,5],[5,6],[6,7],[7,8],[0,9],[9,10],[10,11],[11,12],[0,13],[0,17],[5,9],[9,13],[13,17]]
+      .forEach(([a,b])=>{ctx.moveTo((1-lm[a].x)*vw,lm[a].y*vh);ctx.lineTo((1-lm[b].x)*vw,lm[b].y*vh);});
+    ctx.stroke();
+    const tip=lm[8];
+    fingertips.push({x:(1-tip.x)*vw,y:tip.y*vh,hit:false});
+  }
+  checkHits();
+  fingertips.forEach(f=>drawMallet(f.x,f.y,f.hit));
+  if(running)hint.classList.toggle('show',!handSeen);
+}
+function drawMallet(x,y,hitFlash){
+  ctx.save();ctx.translate(x,y);ctx.rotate(-0.35);
+  ctx.fillStyle='#A1887F';ctx.strokeStyle='#5D4037';ctx.lineWidth=3;
+  ctx.beginPath();ctx.roundRect(-6,0,12,46,6);ctx.fill();ctx.stroke();
+  ctx.fillStyle=hitFlash?'#FFD54F':'#C62828';
+  ctx.beginPath();ctx.roundRect(-26,-24,52,30,10);ctx.fill();ctx.stroke();
+  ctx.fillStyle=hitFlash?'#FFF176':'#EF5350';
+  ctx.beginPath();ctx.roundRect(-16,-24,32,30,6);ctx.fill();
+  ctx.restore();
+  if(hitFlash){ctx.save();ctx.translate(x,y);ctx.strokeStyle='#FFD54F';ctx.lineWidth=4;
+    ctx.beginPath();ctx.arc(0,0,34,0,Math.PI*2);ctx.stroke();ctx.restore();}
+}
+if(!CanvasRenderingContext2D.prototype.roundRect){
+  CanvasRenderingContext2D.prototype.roundRect=function(x,y,w,h,r){
+    this.beginPath();this.moveTo(x+r,y);this.arcTo(x+w,y,x+w,y+h,r);
+    this.arcTo(x+w,y+h,x,y+h,r);this.arcTo(x,y+h,x,y,r);this.arcTo(x,y,x+w,y,r);this.closePath();return this;};
+}
+
+/* ============ กล้อง ============ */
+buildHoles();
+const camera=new Camera(video,{onFrame:async()=>{await hands.send({image:video});},width:640,height:480});
+camera.start().catch(err=>{
+  document.getElementById('camNote').textContent='⚠️ เปิดกล้องไม่สำเร็จ — ต้องเปิดผ่าน https และอนุญาตสิทธิ์กล้อง';
+  console.error(err);
+});
+</script>
+</body>
+</html>
